@@ -19,6 +19,8 @@ export interface LiveProps {
   removeHandleEvent: (callbackRef: string) => void;
   upload: (name: string, files: FileList | File[]) => void;
   uploadTo: (target: string, name: string, files: FileList | File[]) => void;
+  /** Navigate to a path using LiveView navigation */
+  navigate: (path: string, opts?: { mode?: "redirect" | "patch" }) => void;
 }
 
 export interface LinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
@@ -34,4 +36,13 @@ export interface LinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement>
 }
 
 export function useLiveReact(): LiveProps;
+
+/**
+ * Hook for LiveView-compatible navigation from React.
+ * Works with any element including Ant Design Buttons.
+ * Usage: const navigate = useNavigate();
+ *        <Button onClick={() => navigate("/login")}>Login</Button>
+ */
+export function useNavigate(): (path: string, opts?: { mode?: "redirect" | "patch" }) => void;
+
 export function Link(props: LinkProps): React.ReactElement;

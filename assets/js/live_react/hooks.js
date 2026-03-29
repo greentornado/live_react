@@ -23,6 +23,25 @@ function getChildren(hook) {
   ];
 }
 
+/**
+ * Navigate using LiveView's navigation system.
+ * Works with both LiveView patches and full redirects.
+ */
+function liveNavigate(hook, path, mode = "redirect") {
+  if (!path || !hook.liveSocket) return;
+
+  try {
+    if (mode === "patch") {
+      hook.pushEvent("__live_react_patch", { to: path });
+    } else {
+      // Use LiveView's redirect — this handles live_session navigation properly
+      window.location.href = path;
+    }
+  } catch (_e) {
+    window.location.href = path;
+  }
+}
+
 function getProps(hook) {
   return {
     ...getAttributeJson(hook.el, "data-props"),
@@ -32,7 +51,43 @@ function getProps(hook) {
     removeHandleEvent: hook.removeHandleEvent.bind(hook),
     upload: hook.upload.bind(hook),
     uploadTo: hook.uploadTo.bind(hook),
+    // Navigation helper — React components can call navigate("/path")
+    navigate: (path, opts) => liveNavigate(hook, path, opts?.mode),
   };
+}
+
+/**
+ * Intercept clicks inside React container for LiveView-compatible navigation.
+ * Handles: <a href>, <button data-href>, onClick with navigate()
+ */
+function setupClickDelegation(hook) {
+  hook.el.addEventListener("click", (e) => {
+    // Find the closest <a> or <button data-href> from the click target
+    const anchor = e.target.closest("a[href]");
+    const navButton = e.target.closest("button[data-href]");
+
+    const el = anchor || navButton;
+    if (!el) return;
+
+    const href = anchor ? anchor.getAttribute("href") : navButton.getAttribute("data-href");
+    if (!href) return;
+
+    // Skip external links, anchors, and special protocols
+    if (href.startsWith("http") || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+      return;
+    }
+
+    // Skip if already handled by LiveView (has data-phx-link)
+    if (el.hasAttribute("data-phx-link")) return;
+
+    // Skip if meta/ctrl key held (user wants new tab)
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+
+    // Intercept and navigate via LiveView
+    e.preventDefault();
+    e.stopPropagation();
+    liveNavigate(hook, href);
+  });
 }
 
 export function getHooks(components) {
@@ -79,6 +134,9 @@ export function getHooks(components) {
       // Hide loading skeleton on first component mount
       const skeleton = document.getElementById("app-skeleton");
       if (skeleton) skeleton.style.display = "none";
+
+      // Setup click delegation for LiveView navigation
+      setupClickDelegation(this);
 
       const isSSR = this.el.hasAttribute("data-ssr");
 
